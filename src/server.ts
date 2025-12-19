@@ -1,10 +1,11 @@
-// src/server.ts
 import dotenv from "dotenv";
-dotenv.config(); // 🔹 Cargar variables antes de todo
+dotenv.config();
 
-import app from "./index"; // 🔹 Luego importas tu app configurada
+import app from "./app";
 
 const PORT = process.env.PORT || 4000;
+
+app.set("trust proxy", 1);
 
 app.listen(PORT, () => {
   console.log(`✅ User service running on http://localhost:${PORT}`);

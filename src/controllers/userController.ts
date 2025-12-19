@@ -1,73 +1,117 @@
-import { Request, Response, NextFunction } from "express";
+// src/controllers/user.controller.ts
+import type { Request, Response, NextFunction } from "express";
 import { userService } from "../services/userService";
-import { z } from "zod";
+import type { UserCreateInput, UserUpdateInput } from "../types/User";
 
-// 🧩 Schemas de validación de request
-const getUsersSchema = z.object({
-  page: z.string().optional(),
-  limit: z.string().optional(),
-  search: z.string().optional(),
-});
+/* ======================================================
+   Helpers
+====================================================== */
+function parseBool(value: unknown): boolean | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const v = value.trim().toLowerCase();
+    if (v === "true") return true;
+    if (v === "false") return false;
+  }
+  return undefined;
+}
 
-const assignRoleSchema = z.object({
-  usuarioId: z.string().uuid("Usuario ID inválido"),
-  rolId: z.string().uuid("Rol ID inválido"),
-});
+function parseIntSafe(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
 
-export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const parsed = getUsersSchema.safeParse(req.query);
-    if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error.errors.map(e => e.message) });
+/* ======================================================
+   Controller
+====================================================== */
+export const userController = {
+  // GET /users?page=1&limit=10&search=juan&estado=true
+  async getAll(req: Request, res: Response, next: NextFunction) {
+    try {
+      const page = parseIntSafe(req.query.page, 1);
+      const limit = parseIntSafe(req.query.limit, 10);
+      const search = typeof req.query.search === "string" ? req.query.search : undefined;
+      const estado = parseBool(req.query.estado);
+
+      const result = await userService.getAll({ page, limit, search, estado });
+      return res.status(200).json(result);
+    } catch (err) {
+      next(err);
     }
+  },
 
-    const { page, limit, search } = parsed.data;
+  // GET /users/:id
+  async getById(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const user = await userService.getById(id);
 
-    const users = await userService.getAll({
-      page: page ? parseInt(page) : 1,
-      limit: limit ? parseInt(limit) : 10,
-      search: search || "",
-    });
+      if (!user) {
+        return res.status(404).json({ message: "Usuario no encontrado." });
+      }
 
-    res.json(users);
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const createUser = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const user = await userService.create(req.body);
-    res.status(201).json(user);
-  } catch (err: any) {
-    // Manejo de errores de validación de Zod y Supabase
-    res.status(400).json({ error: err.message || "Error al crear usuario" });
-  }
-};
-
-export const assignRole = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const parsed = assignRoleSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error.errors.map(e => e.message) });
+      return res.status(200).json(user);
+    } catch (err) {
+      next(err);
     }
+  },
 
-    const { usuarioId, rolId } = parsed.data;
-    const result = await userService.assignRole(usuarioId, rolId);
-    res.status(201).json(result);
-  } catch (err) {
-    next(err);
-  }
-};
+  // POST /users
+  async create(req: Request, res: Response, next: NextFunction) {
+    try {
+      const body = req.body as UserCreateInput;
 
-export const getUserPermissions = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { id } = req.params;
-    if (!id) return res.status(400).json({ error: "ID de usuario requerido" });
+      // Si más adelante tienes auth middleware, aquí puedes leer el usuario logueado:
+      // const createdBy = (req as any).user?.id ?? null;
+      const createdBy = undefined;
 
-    const permisos = await userService.getUserPermissions(id);
-    res.json(permisos);
-  } catch (err) {
-    next(err);
-  }
+      const created = await userService.create(body, { createdBy });
+      return res.status(201).json(created);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  // PUT /users/:id
+  async update(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const body = req.body as UserUpdateInput;
+
+      const updated = await userService.update(id, body);
+      return res.status(200).json(updated);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  // PATCH /users/:id/estado
+  async toggleEstado(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const estado = parseBool(req.body?.estado);
+
+      if (typeof estado !== "boolean") {
+        return res.status(400).json({ message: "El campo 'estado' debe ser true o false." });
+      }
+
+      const updated = await userService.toggleEstado(id, estado);
+      return res.status(200).json(updated);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  // DELETE /users/:id
+  async remove(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+
+      const result = await userService.remove(id);
+      return res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
 };
