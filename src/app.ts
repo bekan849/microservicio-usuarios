@@ -1,3 +1,4 @@
+// src/app.ts
 import express from "express";
 import cors from "cors";
 
@@ -11,10 +12,37 @@ import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
 
-// ✅ CORS (ajusta origin si quieres restringir al dominio del frontend)
+/* ======================================================
+   ✅ CORS por ENV (local + deploy)
+   - CORS_ORIGIN puede ser uno o varios separados por coma.
+     Ej:
+       CORS_ORIGIN=http://localhost:5173
+       CORS_ORIGIN=http://localhost:5173,https://tuapp.vercel.app
+       CORS_ORIGIN=*
+====================================================== */
+const corsOrigins = (
+  process.env.CORS_ORIGIN ||
+  process.env.FRONTEND_URL ||
+  "http://localhost:5173"
+)
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: "*",
+    origin: (origin, callback) => {
+      // Permite Postman/curl o requests sin Origin
+      if (!origin) return callback(null, true);
+
+      // Permite todos si pones *
+      if (corsOrigins.includes("*")) return callback(null, true);
+
+      // Permite si coincide el origin exacto
+      if (corsOrigins.includes(origin)) return callback(null, true);
+
+      return callback(new Error(`CORS bloqueado para: ${origin}`));
+    },
     credentials: true,
   })
 );

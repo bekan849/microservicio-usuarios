@@ -1,5 +1,5 @@
 // src/types/express.d.ts
-import type { AuthPayload } from "../middlewares/auth.middleware";
+import type { AuthPayload } from "../middleware/authMiddleware";
 
 declare global {
   namespace Express {
